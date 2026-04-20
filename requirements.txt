@@ -1,0 +1,40 @@
+# IoT Lakehouse Pipeline + dbt Snowflake + Fraud Detection
+# Pin versions for reproducibility
+
+# Core
+pyspark==3.5.1
+delta-spark==3.1.0
+
+# Azure
+azure-storage-file-datalake==12.15.0
+azure-identity==1.16.0
+azure-keyvault-secrets==4.8.0
+
+# dbt
+dbt-core==1.8.0
+dbt-databricks==1.8.0
+dbt-snowflake==1.8.0
+dbt-utils==1.2.0
+
+# Kafka
+confluent-kafka==2.4.0
+
+# Data quality
+great-expectations==0.18.19
+
+# Airflow (pinned for DAG compatibility)
+apache-airflow==2.9.0
+apache-airflow-providers-databricks==6.5.0
+apache-airflow-providers-snowflake==5.5.0
+
+# Utilities
+python-dotenv==1.0.1
+pydantic==2.7.0
+requests==2.32.0
+structlog==24.1.0
+
+# Dev / testing
+pytest==8.1.0
+pytest-mock==3.14.0
+black==24.3.0
+ruff==0.4.1

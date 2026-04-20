@@ -1,0 +1,89 @@
+version: 2
+
+models:
+  - name: mart_oee_daily
+    description: >
+      Daily OEE (Overall Equipment Effectiveness) per machine per shift.
+      OEE = Availability × Performance × Quality.
+      World-class manufacturing targets OEE ≥ 0.85.
+      All rate columns are between 0.0 and 1.0.
+    
+    config:
+      tags: ['gold', 'oee', 'critical']
+
+    columns:
+      - name: oee_key
+        description: Surrogate key — machine_id + shift_id + event_date
+        tests:
+          - unique
+          - not_null
+
+      - name: machine_id
+        description: Foreign key to DimMachine
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_machine_metadata')
+              field: machine_id
+
+      - name: event_date
+        description: Calendar date of the OEE measurement
+        tests:
+          - not_null
+
+      - name: availability_rate
+        description: (Planned time - Downtime) / Planned time. Range 0.0–1.0.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+
+      - name: performance_rate
+        description: Actual output vs ideal output rate. Range 0.0–1.0.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+
+      - name: quality_rate
+        description: Good units / Total units produced. Range 0.0–1.0.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+
+      - name: oee_score
+        description: >
+          Composite OEE = Availability × Performance × Quality.
+          Range 0.0–1.0. Threshold alerts: <0.60 = critical, ≥0.85 = world-class.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0.0
+              max_value: 1.0
+          - assert_oee_equals_product_of_components:
+              tolerance: 0.001
+
+      - name: oee_tier
+        description: Business classification — WORLD_CLASS, ACCEPTABLE, or NEEDS_IMPROVEMENT
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['WORLD_CLASS', 'ACCEPTABLE', 'NEEDS_IMPROVEMENT']
+
+      - name: defect_count
+        description: Number of defective units produced in the shift
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+
+      - name: total_downtime_minutes
+        description: Total machine downtime in minutes for the shift
+        tests:
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 960    # Max 16 hours — longer than any shift

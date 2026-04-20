@@ -1,0 +1,120 @@
+name: dbt CI — Test & Deploy
+
+on:
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'dbt/**'
+  push:
+    branches: [main]
+    paths:
+      - 'dbt/**'
+
+env:
+  DBT_PROFILES_DIR: ./dbt
+  PYTHON_VERSION: "3.11"
+
+jobs:
+  dbt-test:
+    name: Run dbt Tests (PR gate)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          pip install dbt-databricks==1.8.0 dbt-utils==1.2.0
+
+      - name: dbt deps
+        working-directory: dbt
+        run: dbt deps
+
+      - name: dbt compile (syntax check)
+        working-directory: dbt
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_STAGING }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_STAGING }}
+        run: dbt compile --target staging
+
+      - name: dbt test — all schema and custom tests
+        working-directory: dbt
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_STAGING }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_STAGING }}
+        run: |
+          dbt test \
+            --target staging \
+            --select state:modified+ \
+            --defer \
+            --state ./target/manifest.json
+        # state:modified+ runs tests only on changed models and their downstream dependents
+        # --defer fetches unmodified models from production rather than rebuilding them
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: dbt-test-results
+          path: dbt/target/run_results.json
+
+  dbt-deploy:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: []    # Runs independently on merge to main — tests ran in PR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install dbt-databricks==1.8.0 dbt-utils==1.2.0
+
+      - name: dbt deps
+        working-directory: dbt
+        run: dbt deps
+
+      - name: dbt run — production full refresh (Gold layer only)
+        working-directory: dbt
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
+        run: |
+          dbt run \
+            --target prod \
+            --select tag:gold \
+            --vars '{"run_date": "${{ github.event.head_commit.timestamp }}"}'
+
+      - name: dbt test — production validation post-deploy
+        working-directory: dbt
+        env:
+          DATABRICKS_HOST:  ${{ secrets.DATABRICKS_HOST_PROD }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
+        run: |
+          dbt test \
+            --target prod \
+            --select tag:critical
+
+      - name: Notify on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          text: ":red_circle: dbt production deploy failed on `${{ github.ref_name }}`. Check: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_DATA_ENG }}
