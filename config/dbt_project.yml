@@ -1,0 +1,84 @@
+name: iot_lakehouse
+version: '1.0.0'
+config-version: 2
+
+# ── Project config ────────────────────────────────────────────────────────────
+profile: iot_lakehouse
+
+model-paths:      ["models"]
+analysis-paths:   ["analyses"]
+test-paths:       ["tests"]
+seed-paths:       ["seeds"]
+macro-paths:      ["macros"]
+snapshot-paths:   ["snapshots"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# ── Package dependencies ──────────────────────────────────────────────────────
+packages:
+  - package: dbt-labs/dbt_utils
+    version: "1.2.0"
+
+# ── Model configuration ───────────────────────────────────────────────────────
+models:
+  iot_lakehouse:
+
+    # Staging — views, no materialisation cost, 1-to-1 with source
+    staging:
+      +materialized: view
+      +schema: staging
+      +tags: ['staging']
+
+    # Intermediate — ephemeral — no tables created, just CTE logic
+    intermediate:
+      +materialized: ephemeral
+      +tags: ['intermediate']
+
+    # Marts — incremental tables in Gold schema
+    marts:
+      +materialized: incremental
+      +schema: gold
+      +tags: ['gold']
+
+      oee:
+        +tags: ['gold', 'oee', 'critical']
+        +unique_key: 'oee_key'
+
+      defects:
+        +tags: ['gold', 'defects']
+
+      machine_health:
+        +tags: ['gold', 'health']
+
+# ── Seed configuration ────────────────────────────────────────────────────────
+seeds:
+  iot_lakehouse:
+    +schema: reference
+    +column_types:
+      machine_type: varchar(50)
+      line_id: varchar(30)
+
+# ── Snapshot configuration ────────────────────────────────────────────────────
+snapshots:
+  iot_lakehouse:
+    +target_schema: snapshots
+    +strategy: timestamp
+    +updated_at: updated_at
+
+# ── Source freshness thresholds ───────────────────────────────────────────────
+# Warn if source hasn't updated in 2 hours, error if 4 hours
+# This guards against upstream pipeline failures before they reach Gold
+
+vars:
+  # Freshness
+  source_warn_after:  {count: 2, period: hour}
+  source_error_after: {count: 4, period: hour}
+
+  # Business rules
+  oee_world_class_threshold: 0.85
+  oee_acceptable_threshold:  0.60
+  max_shift_downtime_minutes: 960
+
+  # GE tolerance
+  ge_mostly_threshold: 0.98
