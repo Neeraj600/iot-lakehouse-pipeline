@@ -24,80 +24,10 @@ This pipeline ingests sensor events in near real-time, applies quality validatio
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        DATA SOURCES                                  │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐              │
-│  │ IoT Sensors  │  │  ERP System  │  │  MES System  │              │
-│  │ (MQTT/HTTP)  │  │  (Oracle DB) │  │  (REST API)  │              │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘              │
-└─────────┼─────────────────┼─────────────────┼────────────────────┘
-          │                 │                 │
-          ▼                 ▼                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                     INGESTION LAYER                                  │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │              Azure Data Factory (ADF)                        │   │
-│  │  • Tumbling window triggers (hourly)                        │   │
-│  │  • Watermark-based incremental loads                        │   │
-│  │  • Event Hub connector for IoT stream                       │   │
-│  │  • Parameterised, metadata-driven pipeline config           │   │
-│  └──────────────────────────┬───────────────────────────────────┘   │
-└─────────────────────────────┼───────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                    STORAGE — ADLS Gen2                               │
-│  ┌─────────────┐   ┌──────────────┐   ┌─────────────────────────┐  │
-│  │   BRONZE    │──▶│    SILVER    │──▶│         GOLD            │  │
-│  │  Raw zone   │   │  Cleansed +  │   │  Business aggregates    │  │
-│  │  Parquet /  │   │  Enriched /  │   │  Star schema / Delta    │  │
-│  │  Delta Lake │   │  Validated   │   │  Z-ordered + compacted  │  │
-│  └─────────────┘   └──────────────┘   └─────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                  TRANSFORMATION LAYER                                │
-│  ┌───────────────────────┐    ┌──────────────────────────────────┐  │
-│  │  Azure Databricks     │    │  Great Expectations              │  │
-│  │  PySpark notebooks    │    │  Data quality checkpoints        │  │
-│  │  Bronze → Silver      │    │  - Null / completeness checks    │  │
-│  │  Silver → Gold        │    │  - Schema validation             │  │
-│  └───────────────────────┘    │  - Business rule assertions      │  │
-│                               └──────────────────────────────────┘  │
-│  ┌───────────────────────────────────────────────────────────────┐  │
-│  │  dbt (Analytics Engineering Layer)                           │  │
-│  │  Staging → Intermediate → Marts                              │  │
-│  │  Schema tests · Source freshness · Column-level lineage      │  │
-│  └───────────────────────────────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                   SERVING LAYER                                      │
-│  ┌──────────────────────┐    ┌─────────────────────────────────┐   │
-│  │  Azure Synapse SQL   │    │  Power BI                       │   │
-│  │  Dedicated pool      │    │  OEE Dashboard                  │   │
-│  │  DirectQuery         │    │  Machine Health Dashboard       │   │
-│  └──────────────────────┘    │  Defect Rate Trend              │   │
-│                               └─────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│               OBSERVABILITY & GOVERNANCE                             │
-│  ┌────────────────┐  ┌───────────────┐  ┌────────────────────────┐ │
-│  │ Azure Monitor  │  │    Grafana    │  │    Unity Catalog       │ │
-│  │ + Log Analytics│  │  Dashboards   │  │  Lineage + RBAC        │ │
-│  │ Alert rules    │  │  Pipeline SLAs│  │  Access policies       │ │
-│  └────────────────┘  └───────────────┘  └────────────────────────┘ │
-│  ┌─────────────────────────────────────────────────────────────────┐│
-│  │          Terraform — All infra version-controlled               ││
-│  │          GitHub Actions — CI/CD for dbt + ADF                  ││
-│  └─────────────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────────┘
-```
 <img width="955" height="596" alt="image" src="https://github.com/user-attachments/assets/afaa780d-9a63-44b7-ba90-7d5f1aff6397" />
+
+```
+
 
 ---
 
