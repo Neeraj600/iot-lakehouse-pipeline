@@ -97,6 +97,7 @@ This pipeline ingests sensor events in near real-time, applies quality validatio
 │  └─────────────────────────────────────────────────────────────────┘│
 └─────────────────────────────────────────────────────────────────────┘
 ```
+<img width="955" height="596" alt="image" src="https://github.com/user-attachments/assets/afaa780d-9a63-44b7-ba90-7d5f1aff6397" />
 
 ---
 
